@@ -3,7 +3,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def load_config_yaml(path="config.yaml"):
+def load_config_yaml(path="config/config.yaml"):
     """
     Load a YAML config file and return the parsed dictionary.
     Returns an empty dict if file is missing or malformed.
