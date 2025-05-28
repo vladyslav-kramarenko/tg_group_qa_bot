@@ -2,16 +2,19 @@
 import json
 import logging
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 
 import faiss
 from embedder import get_embedder
 from config.config_loader import load_config_yaml
+from collections import defaultdict
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 config = load_config_yaml()
+search_config = config.get("search", {})
+DISTANCE_THRESHOLD = float(search_config.get("distance_threshold", 1.0))
 index_config = config.get("index", {})
 INDEX_DIR = Path(index_config.get("dir", "index"))
 INDEX_FILE = INDEX_DIR / index_config.get("name", "qa_index.faiss")
@@ -27,34 +30,60 @@ with open(META_FILE, "r", encoding="utf-8") as f:
 
 embedder = get_embedder()
 
-def search(query: str, top_k: int = 5) -> List[Tuple[str, dict]]:
+def search(query: str, top_k: int = 10) -> List[dict]:
     logger.info(f"🔍 Searching for: {query}")
     embedding = embedder.encode([query])
     D, I = index.search(embedding, top_k)
 
-    results = []
+    raw_results = []
     for i, idx in enumerate(I[0]):
         if idx < len(metadata):
-            result = metadata[idx]
-            result_score = float(D[0][i])
-            results.append((result_score, result))
+            distance = float(D[0][i])
+            if distance <= DISTANCE_THRESHOLD:
+                raw_results.append((distance, metadata[idx]))
 
-    if not results:
-        logger.warning("🚫 No matching results found.")
+    if not raw_results:
+        logger.warning("🚫 No matching results found under threshold.")
+        return []
 
-    return results
+    # Group by origin + source
+    grouped = {}
+    for distance, chunk in raw_results:
+        key = (chunk["origin"], chunk["source"])
+        if key not in grouped:
+            grouped[key] = {
+                "source": chunk["source"],
+                "origin": chunk["origin"],
+                "score": distance,
+                "chunks": [chunk]
+            }
+        else:
+            grouped[key]["chunks"].append(chunk)
+            if distance < grouped[key]["score"]:
+                grouped[key]["score"] = distance  # keep best score
 
-def format_result(result: dict, score: float) -> str:
-    title = result.get("title") or result.get("origin", "N/A")
-    service = result.get("service", "unknown")
-    src = result.get("source")
-    rtype = result.get("type")
-    text = result.get("text")
-    url = result.get("url")
+    sorted_groups = sorted(grouped.values(), key=lambda x: x["score"])
+    return sorted_groups
 
-    display = f"\n📌 Source: {src.upper()} ({service})\n🔎 Type: {rtype}\n🧠 Score: {score:.4f}\n📝 Content:\n{text}"
+def format_result(group: dict) -> str:
+    title = group["chunks"][0].get("title", group["origin"])
+    service = group["chunks"][0].get("service", "unknown")
+    url = group["chunks"][0].get("url")
+    top_score = group["score"]
+
+    display = f"\n📌 Source: {group['source'].upper()} ({service})\n🎬 Title: {title}\n🧠 Top Score: {top_score:.4f}"
     if url:
         display += f"\n🔗 Watch video: {url}"
+
+    for chunk in group["chunks"]:
+        if chunk["type"] == "summary":
+            display += f"\n\n📝 Summary:\n{chunk['text']}"
+        elif chunk["type"] == "steps":
+            steps = "\n".join(f"• {line.strip('- ').strip()}" for line in chunk["text"].split("\n") if line.strip())
+            display += f"\n\n🪜 Steps:\n{steps}"
+        elif chunk["type"] == "faq":
+            display += f"\n\n❓ Q&A:\n{chunk['text']}"
+
     return display
 
 if __name__ == "__main__":
@@ -65,5 +94,5 @@ if __name__ == "__main__":
 
     query = sys.argv[1]
     results = search(query)
-    for score, r in results:
-        print(format_result(r, score))
+    for group in results:
+        print(format_result(group))
