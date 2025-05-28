@@ -1,33 +1,30 @@
+### enrichment.py
 import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).resolve().parent.parent))
+
 import os
 import json
 import logging
 import re
-from pathlib import Path
 import google.generativeai as genai
-
-# ✅ Add project root to sys.path
-sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from config.config_loader import load_config_yaml
 from video.youtube_downloader import extract_video_id
 
-# === LOGGING ===
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
-# === CONFIG ===
 API_KEY = os.getenv("GOOGLE_API_KEY")
 if not API_KEY:
     raise ValueError("❌ GOOGLE_API_KEY is missing in your environment")
 genai.configure(api_key=API_KEY)
 
 config = load_config_yaml()
-MODEL_NAME = config.get("gemini", {}).get("video_enrichment", "gemini-1.5-pro")
+MODEL_NAME = config.get("gemini", {}).get("video_enrichment_model", "gemini-1.5-pro")
 DOWNLOAD_DIR = Path("downloads")
 OUTPUT_DIR = Path("data/enriched_video_data")
 
-# === PROMPTS ===
 SYSTEM_ROLE = """
 You are an expert assistant trained to understand videos and extract useful insights.
 Your task is to analyze the content and provide:
@@ -42,11 +39,14 @@ Please analyze this instructional video. What does it explain?
 Extract key steps and user-relevant Q&A based only on its visual and audio content.
 """
 
-# === MAIN ENRICHMENT FUNCTION ===
-def enrich_video_locally(service: str, video_path: Path, title: str):
-    logger.info(f"📼 Enriching video: {title} ({video_path})")
+def extract_json_block(text: str) -> str:
+    match = re.search(r"```json\s*(.*?)```", text, re.DOTALL)
+    return match.group(1).strip() if match else text.strip()
 
+def enrich_video_locally(service: str, video_path: Path, title: str):
+    logger.info(f"\U0001F4FC Enriching video: {title} ({video_path})")
     model = genai.GenerativeModel(model_name=MODEL_NAME)
+
     video_bytes = video_path.read_bytes()
     video_part = {
         "mime_type": "video/mp4",
@@ -57,19 +57,25 @@ def enrich_video_locally(service: str, video_path: Path, title: str):
     try:
         response = model.generate_content(contents)
         output = extract_json_block(response.text)
+        parsed = json.loads(output)
+
+        parsed["title"] = title
+        parsed["service"] = service
+        parsed["video_url"] = str(video_path)
+
+        for v in config.get("data_sources", {}).get("videos", []):
+            if v.get("title") == title:
+                parsed["video_url"] = v.get("url")
 
         output_path = OUTPUT_DIR / service / f"{video_path.stem}.json"
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(output, encoding="utf-8")
-
+        output_path.write_text(json.dumps(parsed, ensure_ascii=False, indent=2), encoding="utf-8")
         logger.info(f"✅ Saved enriched output to: {output_path}")
     except Exception as e:
         logger.error(f"❌ Failed to enrich video {video_path.name}: {e}")
 
-# === ENRICH ALL DOWNLOADED VIDEOS ===
 def enrich_all_local_videos():
     videos = config.get("data_sources", {}).get("videos", [])
-
     for video in videos:
         url = video.get("url")
         service = video.get("service")
@@ -89,14 +95,5 @@ def enrich_all_local_videos():
 
         enrich_video_locally(service, local_path, title)
 
-# === HELPER ===
-def extract_json_block(text: str) -> str:
-    """
-    Extract the first JSON code block from the LLM output.
-    """
-    match = re.search(r"```json\s*(.*?)```", text, re.DOTALL)
-    return match.group(1).strip() if match else text.strip()
-
-# === MAIN ENTRYPOINT ===
 if __name__ == "__main__":
     enrich_all_local_videos()
