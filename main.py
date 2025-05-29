@@ -1,7 +1,5 @@
 import argparse
 import logging
-from video.transcript_loader import fetch_all_transcripts
-from video.chunker import process_all_cached_transcripts
 # from video.embedder import build_all_faiss_indexes  # Future
 # from bot.bot import run_bot                         # Optional integration
 
@@ -18,15 +16,8 @@ def main():
     ])
     args = parser.parse_args()
 
-    if args.task == "fetch_transcripts":
-        logger.info("📥 Fetching video transcripts...")
-        fetch_all_transcripts()
 
-    elif args.task == "chunk_transcripts":
-        logger.info("🧩 Chunking cached transcripts...")
-        process_all_cached_transcripts()
-
-    elif args.task == "enrich_videos":
+    if args.task == "enrich_videos":
         from video.enrichment import enrich_all_local_videos
         enrich_all_local_videos()
 
