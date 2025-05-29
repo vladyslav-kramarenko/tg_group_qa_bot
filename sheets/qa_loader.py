@@ -2,7 +2,7 @@ import pandas as pd
 import requests
 import io
 import logging
-from sheet_client import get_sheet_client
+from sheets.sheet_client import get_sheet_client
 
 logger = logging.getLogger(__name__)
 
