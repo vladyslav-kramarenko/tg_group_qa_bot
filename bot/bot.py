@@ -69,7 +69,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not results:
         logger.warning("⚠️ No search results found.")
-        await update.message.reply_text("❓ Sorry, I couldn’t find a relevant answer. Want to rephrase or clarify?")
+        if is_tagged:
+            await update.message.reply_text("❓ Sorry, I couldn’t find a relevant answer. Want to rephrase or clarify?")
         log_staging_qa(question=raw_text, answer=None, user=user, chat=chat)
         return
 
