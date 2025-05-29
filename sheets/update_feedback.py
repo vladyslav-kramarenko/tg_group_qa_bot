@@ -1,4 +1,4 @@
-from sheet_client import get_sheet_client
+from sheets.sheet_client import get_sheet_client
 import logging
 
 logger = logging.getLogger(__name__)
