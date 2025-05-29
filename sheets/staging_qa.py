@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 # === CONFIG ===
 from config.config_loader import load_config_yaml
 
-config = load_config_yaml("config.yaml")
+config = load_config_yaml()
 staging_cfg = config.get("data_sources", {}).get("google_sheets", {}).get("staging", {})
 SHEET_URL = staging_cfg.get("url")
 SHEET_TAB = staging_cfg.get("tab", "staging_qa")
