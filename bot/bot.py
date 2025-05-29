@@ -1,13 +1,14 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, MessageHandler, CallbackQueryHandler, filters, ContextTypes
-from config_loader import load_config_yaml
-from qa_loader import load_qa_from_google_sheet
-from update_feedback import increment_feedback
+from config.config_loader import load_config_yaml
+from sheets.qa_loader import load_qa_from_google_sheet
+from sheets.update_feedback import increment_feedback
 from sentence_transformers import SentenceTransformer
 import faiss
 import numpy as np
 import os
 import logging
+from sheets.staging_qa import log_staging_qa
 
 # === SETUP ===
 logging.basicConfig(level=logging.INFO)
@@ -23,16 +24,26 @@ if not BOT_TOKEN or not BOT_USERNAME:
 
 # === LOAD CONFIG ===
 config = load_config_yaml("config.yaml")
-sheet_cfg = config.get("data_sources", {}).get("google_sheets", {}).get("qa", {})
-SHEET_URL = sheet_cfg.get("url")
-SHEET_TAB = sheet_cfg.get("tab", "QandA")
+# sheet_cfg = config.get("data_sources", {}).get("google_sheets", {}).get("qa", {})
+# SHEET_URL = sheet_cfg.get("url")
+# SHEET_TAB = sheet_cfg.get("tab", "QandA")
+
+qa_cfg = config.get("data_sources", {}).get("google_sheets", {}).get("qa", {})
+staging_cfg = config.get("data_sources", {}).get("google_sheets", {}).get("staging", {})
+
+QA_SHEET_URL = qa_cfg.get("url")
+QA_SHEET_TAB = qa_cfg.get("tab", "QandA")
+
+STAGING_SHEET_URL = staging_cfg.get("url")
+STAGING_SHEET_TAB = staging_cfg.get("tab", "staging_qa")
+
 CONFIDENCE_THRESHOLD = float(config.get("confidence_threshold", 0.75))
 
-if not SHEET_URL:
+if not QA_SHEET_URL:
     raise ValueError("❌ Sheet URL not found in config.yaml under data_sources → google_sheets → qa → url")
 
 # === LOAD Q&A DATA FROM GOOGLE SHEET ===
-qa_pairs = load_qa_from_google_sheet(SHEET_URL, SHEET_TAB)
+qa_pairs = load_qa_from_google_sheet(QA_SHEET_URL, QA_SHEET_TAB)
 
 if not qa_pairs:
     logger.warning("⚠️ No Q&A data loaded — bot will not respond meaningfully.")
@@ -95,6 +106,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text(
             "🤔 I appreciate the tag, but I’m not sure how to help with that yet. Could you rephrase or provide more detail?"
+        )
+        # 📝 Log the tagged but unmatched question
+        log_staging_qa(
+            question=text,
+            answer=None,
+            user=update.effective_user.username,
+            chat=update.effective_chat.title
         )
 
 async def handle_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE):
