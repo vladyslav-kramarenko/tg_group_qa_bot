@@ -1,6 +1,7 @@
 ### search.py
 import json
 import logging
+import re
 from pathlib import Path
 from typing import List, Tuple, Dict
 
@@ -79,8 +80,33 @@ def format_result(group: dict) -> str:
         if chunk["type"] == "summary":
             display += f"\n\n📝 Summary:\n{chunk['text']}"
         elif chunk["type"] == "steps":
-            steps = "\n".join(f"• {line.strip('- ').strip()}" for line in chunk["text"].split("\n") if line.strip())
-            display += f"\n\n🪜 Steps:\n{steps}"
+            lines = chunk["text"].split("\n")
+            formatted_steps = []
+            for i, line in enumerate(lines, 1):
+                # Try to extract just the value from a string like "- {'step': 'Do something'}"
+                match = re.search(r"'step':\s*['\"](.+?)['\"]", line)
+                if match:
+                    step_text = match.group(1)
+                else:
+                    # fallback: just clean hyphens or whitespace
+                    step_text = line.strip("- ").strip()
+                formatted_steps.append(f"{i}. {step_text}")
+            display += f"\n\n🪜 Steps:\n" + "\n".join(formatted_steps)
+
+        # elif chunk["type"] == "steps":
+        #     try:
+        #         parsed_steps = json.loads(chunk["text"])
+        #         if isinstance(parsed_steps, list) and all(isinstance(s, dict) and "step" in s for s in parsed_steps):
+        #             steps = "\n".join(f"• {s['step']}" for s in parsed_steps)
+        #         else:
+        #             steps = chunk["text"]
+        #     except Exception:
+        #         steps = chunk["text"]
+        #     display += f"\n\n🪜 Steps:\n{steps}"
+
+        # elif chunk["type"] == "steps":
+        #     steps = "\n".join(f"• {line.strip('- ').strip()}" for line in chunk["text"].split("\n") if line.strip())
+        #     display += f"\n\n🪜 Steps:\n{steps}"
         elif chunk["type"] == "faq":
             display += f"\n\n❓ Q&A:\n{chunk['text']}"
 
