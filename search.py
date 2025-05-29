@@ -92,21 +92,6 @@ def format_result(group: dict) -> str:
                     step_text = line.strip("- ").strip()
                 formatted_steps.append(f"{i}. {step_text}")
             display += f"\n\n🪜 Steps:\n" + "\n".join(formatted_steps)
-
-        # elif chunk["type"] == "steps":
-        #     try:
-        #         parsed_steps = json.loads(chunk["text"])
-        #         if isinstance(parsed_steps, list) and all(isinstance(s, dict) and "step" in s for s in parsed_steps):
-        #             steps = "\n".join(f"• {s['step']}" for s in parsed_steps)
-        #         else:
-        #             steps = chunk["text"]
-        #     except Exception:
-        #         steps = chunk["text"]
-        #     display += f"\n\n🪜 Steps:\n{steps}"
-
-        # elif chunk["type"] == "steps":
-        #     steps = "\n".join(f"• {line.strip('- ').strip()}" for line in chunk["text"].split("\n") if line.strip())
-        #     display += f"\n\n🪜 Steps:\n{steps}"
         elif chunk["type"] == "faq":
             display += f"\n\n❓ Q&A:\n{chunk['text']}"
 
