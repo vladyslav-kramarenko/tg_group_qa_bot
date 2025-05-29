@@ -27,17 +27,16 @@ if not BOT_TOKEN or not BOT_USERNAME:
 config = load_config_yaml("config.yaml")
 CONFIDENCE_THRESHOLD = float(config.get("confidence_threshold", 0.75))
 
-qa_cfg = config.get("data_sources", {}).get("google_sheets", {}).get("qa", {})
-QA_SHEET_URL = qa_cfg.get("url")
-QA_SHEET_TAB = qa_cfg.get("tab", "QandA")
-if not QA_SHEET_URL:
-    raise ValueError("❌ Sheet URL not found in config.yaml under data_sources → google_sheets → qa → url")
-
 staging_cfg = config.get("data_sources", {}).get("google_sheets", {}).get("staging", {})
 STAGING_SHEET_URL = staging_cfg.get("url")
 STAGING_SHEET_TAB = staging_cfg.get("tab", "staging_qa")
 
 # === LOAD Q&A DATA FROM GOOGLE SHEET ===
+qa_cfg = config.get("data_sources", {}).get("google_sheets", {}).get("qa", {})
+QA_SHEET_URL = qa_cfg.get("url")
+QA_SHEET_TAB = qa_cfg.get("tab", "QandA")
+if not QA_SHEET_URL:
+    raise ValueError("❌ Sheet URL not found in config.yaml under data_sources → google_sheets → qa → url")
 qa_pairs = load_qa_from_google_sheet(QA_SHEET_URL, QA_SHEET_TAB)
 
 if not qa_pairs:
