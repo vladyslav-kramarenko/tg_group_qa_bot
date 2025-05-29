@@ -1,28 +1,25 @@
+# config/config_loader.py
 import yaml
 import logging
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
-
 _config_cache = None
 
-def load_config_yaml(path="config/config.yaml"):
-    """
-    Load a YAML config file and return the parsed dictionary.
-    Returns an empty dict if file is missing or malformed.
-    """
+DEFAULT_CONFIG_PATH = Path(__file__).parent.parent / "config/config.yaml"
+
+def load_config_yaml(path: Path = DEFAULT_CONFIG_PATH):
+    """Load and cache YAML config, returning as dict."""
     global _config_cache
-    if _config_cache is not None:
+    if _config_cache:
         return _config_cache
-    
-    resolved_path = Path(__file__).resolve().parent.parent / path
 
-    if not resolved_path.exists():
-        logger.error(f"❌ Config file not found: {resolved_path}")
-        raise FileNotFoundError(f"Config file not found: {resolved_path}")
+    if not path.exists():
+        logger.error(f"❌ Config file not found: {path}")
+        raise FileNotFoundError(f"Config file not found: {path}")
 
-    with open(resolved_path, "r", encoding="utf-8") as f:
+    with open(path, "r", encoding="utf-8") as f:
         _config_cache = yaml.safe_load(f)
 
-    logger.info(f"✅ Loaded config from {resolved_path}")
+    logger.info(f"✅ Loaded config from {path}")
     return _config_cache
