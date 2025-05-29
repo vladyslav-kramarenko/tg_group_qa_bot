@@ -10,12 +10,13 @@ import os
 import logging
 from sheets.staging_qa import log_staging_qa
 
-# === SETUP ===
+# === LOGGING SETUP ===
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("telegram.bot").setLevel(logging.WARNING)
 
+# === BOT CONFIG ===
 BOT_TOKEN = os.getenv("TG_BOT_TOKEN")
 BOT_USERNAME = os.getenv("TG_BOT_USERNAME")
 
@@ -24,23 +25,17 @@ if not BOT_TOKEN or not BOT_USERNAME:
 
 # === LOAD CONFIG ===
 config = load_config_yaml("config.yaml")
-# sheet_cfg = config.get("data_sources", {}).get("google_sheets", {}).get("qa", {})
-# SHEET_URL = sheet_cfg.get("url")
-# SHEET_TAB = sheet_cfg.get("tab", "QandA")
-
-qa_cfg = config.get("data_sources", {}).get("google_sheets", {}).get("qa", {})
-staging_cfg = config.get("data_sources", {}).get("google_sheets", {}).get("staging", {})
-
-QA_SHEET_URL = qa_cfg.get("url")
-QA_SHEET_TAB = qa_cfg.get("tab", "QandA")
-
-STAGING_SHEET_URL = staging_cfg.get("url")
-STAGING_SHEET_TAB = staging_cfg.get("tab", "staging_qa")
-
 CONFIDENCE_THRESHOLD = float(config.get("confidence_threshold", 0.75))
 
+qa_cfg = config.get("data_sources", {}).get("google_sheets", {}).get("qa", {})
+QA_SHEET_URL = qa_cfg.get("url")
+QA_SHEET_TAB = qa_cfg.get("tab", "QandA")
 if not QA_SHEET_URL:
     raise ValueError("❌ Sheet URL not found in config.yaml under data_sources → google_sheets → qa → url")
+
+staging_cfg = config.get("data_sources", {}).get("google_sheets", {}).get("staging", {})
+STAGING_SHEET_URL = staging_cfg.get("url")
+STAGING_SHEET_TAB = staging_cfg.get("tab", "staging_qa")
 
 # === LOAD Q&A DATA FROM GOOGLE SHEET ===
 qa_pairs = load_qa_from_google_sheet(QA_SHEET_URL, QA_SHEET_TAB)
