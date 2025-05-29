@@ -4,6 +4,7 @@ from telegram.ext import ApplicationBuilder, MessageHandler, CallbackQueryHandle
 import os
 import logging
 import sys
+import time
 from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
@@ -63,6 +64,10 @@ if not STAGING_SHEET_URL:
 # === TELEGRAM BOT ===
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 
+def clean_query(text: str) -> str:
+    # Remove bot mention and excess whitespace
+    return text.replace(f"@{BOT_USERNAME}", "").strip()
+
 def is_mentioned(update: Update) -> bool:
     if not update.message or not update.message.text:
         return False
@@ -79,7 +84,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
         return
 
-    text = update.message.text.strip()
+    raw_text = update.message.text.strip()
+    text = clean_query(raw_text)
+    logger.info(f"🔍 Cleaned query: {text}")
     user = update.effective_user.username
     chat = update.effective_chat.title
 
@@ -93,48 +100,36 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     #     answer_index = int(idx) if confident else None
 
     is_tagged = is_mentioned(update)
+    start_time = time.time()
     results = search(text)
-    top_score = results[0][0] if results else float("inf")
+    elapsed = time.time() - start_time
+
+    if not results:
+        logger.warning("⚠️ No search results found.")
+        await update.message.reply_text("❓ Sorry, I couldn’t find a relevant answer. Want to rephrase or clarify?")
+        log_staging_qa(question=raw_text, answer=None, user=user, chat=chat)
+        return
+
+    top_group = results[0]
+    top_score = top_group["score"]
     confident = top_score < CONFIDENCE_THRESHOLD
 
     should_respond = is_tagged or confident
 
     if not should_respond:
         return  # stay silent if not tagged and no confident match
+    
+    messages = [format_result(top_group) + f"\n⏱️ _Response time: {elapsed:.2f}s_" for _ in range(1)]
 
-    if results:
-        # best_answer = qa_pairs[answer_index]["answer"]
-        # matched_question = qa_pairs[answer_index]["question"]
-        top_score, matched_chunks = results[0]
-        messages = [format_result(chunk, top_score) for chunk in matched_chunks]
-
-        # response = f"💬 *Answer:*\n{best_answer}"
-        # buttons = InlineKeyboardMarkup([
-        #     [
-        #         InlineKeyboardButton("👍", callback_data=f"feedback|{answer_index}|positive_feedback"),
-        #         InlineKeyboardButton("👎", callback_data=f"feedback|{answer_index}|negative_feedback")
-        #     ]
-        # ])
-        # await update.message.reply_text(response, parse_mode="Markdown", reply_markup=buttons)
-        for idx, msg in enumerate(messages):
-            buttons = InlineKeyboardMarkup([
-                [
-                    InlineKeyboardButton("👍", callback_data=f"feedback|{idx}|positive_feedback"),
-                    InlineKeyboardButton("👎", callback_data=f"feedback|{idx}|negative_feedback")
-                ]
-            ])
-            await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=buttons)
-    else:
-        await update.message.reply_text(
-            "🤔 I appreciate the tag, but I’m not sure how to help with that yet. Could you rephrase or provide more detail?"
-        )
-        # 📝 Log the tagged but unmatched question
-        log_staging_qa(
-            question=text,
-            answer=None,
-            user=update.effective_user.username,
-            chat=update.effective_chat.title
-        )
+    for idx, msg in enumerate(messages):
+        buttons = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("👍", callback_data=f"feedback|{idx}|positive_feedback"),
+                InlineKeyboardButton("👎", callback_data=f"feedback|{idx}|negative_feedback")
+            ]
+        ])
+        await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=buttons)
+  
 
 async def handle_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
