@@ -2,6 +2,7 @@
 import json
 import logging
 import re
+import ast
 from pathlib import Path
 from typing import List, Tuple, Dict
 
@@ -83,13 +84,12 @@ def format_result(group: dict) -> str:
             lines = chunk["text"].split("\n")
             formatted_steps = []
             for i, line in enumerate(lines, 1):
-                # Try to extract just the value from a string like "- {'step': 'Do something'}"
-                match = re.search(r"'step':\s*['\"](.+?)['\"]", line)
-                if match:
-                    step_text = match.group(1)
-                else:
-                    # fallback: just clean hyphens or whitespace
-                    step_text = line.strip("- ").strip()
+                line = line.strip("- ").strip()
+                try:
+                    parsed = ast.literal_eval(line)
+                    step_text = parsed.get("step", line)
+                except (SyntaxError, ValueError):
+                    step_text = line  # fallback if parsing fails
                 formatted_steps.append(f"{i}. {step_text}")
             display += f"\n\n🪜 Steps:\n" + "\n".join(formatted_steps)
         elif chunk["type"] == "faq":
